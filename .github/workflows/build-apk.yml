@@ -1,0 +1,89 @@
+name: Build and Release Flutter APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.3'
+          channel: 'stable'
+          cache: true
+
+      - name: Scaffold Android project wrapper
+        run: |
+          mkdir -p /tmp/backup_flutter
+          cp -r lib /tmp/backup_flutter/
+          cp pubspec.yaml /tmp/backup_flutter/
+          flutter create --org com.example --project-name flutter_file_manager .
+          rm -rf lib
+          cp -r /tmp/backup_flutter/lib ./
+          cp /tmp/backup_flutter/pubspec.yaml ./pubspec.yaml
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build Release APK
+        run: flutter build apk --release
+
+      - name: Stage APK Outputs
+        run: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk dist/FlutterFileManager-v1.0.0.apk
+          cp build/app/outputs/flutter-apk/app-release.apk dist/app-release.apk
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlutterFileManager-APK
+          path: dist/*.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: "Flutter File Manager Release v1.0.0"
+          draft: false
+          prerelease: false
+          body: |
+            # 📁 Flutter File Manager v1.0.0
+
+            Production-grade Material Design 3 File Manager built with Flutter for Android.
+
+            ### ✨ Key Features
+            - **Material 3 Interface**: Dynamic color palettes, bottom navigation, and fluid animations.
+            - **Storage Analyzer & Cleaner**: Sweep junk cache and duplicate files.
+            - **Encrypted Safe Folder**: PIN-protected vault for private files.
+            - **In-App Previewers**: Preview photos, code, documents, and media.
+            - **Full File Management**: Search, sort, create, rename, and manage folders.
+
+            ---
+            ### ⬇️ Direct Download Links
+            - **[Download FlutterFileManager-v1.0.0.apk](https://github.com/${{ github.repository }}/releases/download/v1.0.0/FlutterFileManager-v1.0.0.apk)**
+            - **[Direct Mirror (app-release.apk)](https://github.com/${{ github.repository }}/releases/download/v1.0.0/app-release.apk)**
+          files: |
+            dist/FlutterFileManager-v1.0.0.apk
+            dist/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
